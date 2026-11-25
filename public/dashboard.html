@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Painel - UPA Parque dos Ferreira</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header class="top-header">
+    <img src="img/logo-prefeitura.png" alt="Logo Prefeitura" class="header-logo">
+    <div class="header-title">
+      <h1>Controle de Atendimentos</h1>
+      <span id="infoUsuario"></span>
+    </div>
+    <img src="img/logo_upa_24h.png" alt="Logo UPA 24h" class="header-logo">
+  </header>
+
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="tabLancamento">Lançamento Diário</button>
+    <button class="tab-btn" data-tab="tabRelatorios">Gráficos & Excel</button>
+    <button class="tab-btn hidden" id="btnTabAdmin" data-tab="tabAdmin">Administração</button>
+    <button class="tab-btn logout" id="btnSair">Sair</button>
+  </nav>
+
+  <main class="container">
+    <!-- ABA 1: LANÇAMENTO DIÁRIO -->
+    <section id="tabLancamento" class="tab-content active">
+      <div class="toolbar">
+        <label>Data do Plantão: <input type="date" id="dataPlantao"></label>
+        <button id="btnAddExtra" class="btn-secondary">+ Adicionar Médico Extra</button>
+        <button id="btnSalvarDia" class="btn-primary">Salvar no Banco</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Médico Escalado / Atendente</th>
+              <th>Troca de Plantão</th>
+              <th>Atendimentos</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyEscala"></tbody>
+        </table>
+      </div>
+      <p id="msgLancamento" class="msg"></p>
+    </section>
+
+    <!-- ABA 2: GRÁFICOS E EXPORTAÇÃO -->
+    <section id="tabRelatorios" class="tab-content hidden">
+      <div class="toolbar">
+        <label>Início: <input type="date" id="filtroInicio"></label>
+        <label>Fim: <input type="date" id="filtroFim"></label>
+        <button id="btnAtualizarGrafico" class="btn-primary">Atualizar Gráfico</button>
+      </div>
+      <div class="export-bar">
+        <span>Exportar Planilha (Excel):</span>
+        <button class="btn-excel" onclick="exportarExcel('diaria')">Diária</button>
+        <button class="btn-excel" onclick="exportarExcel('semanal')">Semanal</button>
+        <button class="btn-excel" onclick="exportarExcel('mensal')">Mensal</button>
+      </div>
+      <div class="chart-box">
+        <canvas id="graficoRanking"></canvas>
+      </div>
+    </section>
+
+    <!-- ABA 3: ADMINISTRAÇÃO -->
+    <section id="tabAdmin" class="tab-content hidden">
+      <div class="admin-grid">
+        <div class="card">
+          <h3>Usuários (Senha padrão: upa123)</h3>
+          <form id="formNovoUsuario" class="inline-form">
+            <input type="text" id="usrNome" placeholder="Nome" required>
+            <input type="email" id="usrEmail" placeholder="E-mail" required>
+            <select id="usrRole">
+              <option value="comum">Usuário Comum</option>
+              <option value="admin">Administrador</option>
+            </select>
+            <button type="submit" class="btn-primary">Cadastrar</button>
+          </form>
+          <ul id="listaUsuarios" class="admin-list"></ul>
+        </div>
+
+        <div class="card">
+          <h3>Cadastro de Médicos</h3>
+          <form id="formNovoMedico" class="inline-form">
+            <input type="text" id="medNome" placeholder="Nome do Médico" required>
+            <input type="text" id="medMat" placeholder="Matrícula(s)">
+            <button type="submit" class="btn-primary">Adicionar</button>
+          </form>
+          <ul id="listaMedicos" class="admin-list"></ul>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - Controle de Atendimentos UPA</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="login-body">
+  <div class="login-card">
+    <img src="img/brasao_prefeitura.png" alt="Brasão da Prefeitura" class="login-brasao">
+    <h2>UPA Parque dos Ferreira</h2>
+    <p class="subtitle">Controle Diário de Atendimentos Médicos</p>
+
+    <form id="formLogin">
+      <input type="email" id="email" placeholder="E-mail institucional" required>
+      <input type="password" id="senha" placeholder="Senha" required>
+      <button type="submit" class="btn-primary">Entrar</button>
+    </form>
+
+    <button id="btnEsqueci" class="btn-link">Esqueci minha senha</button>
+    <p id="msgLogin" class="msg"></p>
+  </div>
+
+  <!-- Modal Primeiro Acesso -->
+  <div id="modalPrimeiroAcesso" class="modal hidden">
+    <div class="modal-content">
+      <h3>Primeiro Acesso</h3>
+      <p>Por segurança, cadastre uma nova senha pessoal (mín. 6 caracteres) para continuar.</p>
+      <input type="password" id="novaSenhaPrimeiro" placeholder="Nova senha">
+      <button id="btnSalvarPrimeiroAcesso" class="btn-primary">Salvar Nova Senha</button>
+    </div>
+  </div>
+
+  <!-- Modal Redefinição via Token -->
+  <div id="modalReset" class="modal hidden">
+    <div class="modal-content">
+      <h3>Redefinir Senha</h3>
+      <input type="password" id="novaSenhaReset" placeholder="Digite sua nova senha">
+      <button id="btnConfirmarReset" class="btn-primary">Confirmar</button>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
