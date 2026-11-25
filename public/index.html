@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Login - Controle de Atendimentos UPA</title>
+  <title>Login - UPA Parque dos Ferreira</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body class="login-body">
@@ -14,30 +15,28 @@
 
     <form id="formLogin">
       <input type="email" id="email" placeholder="E-mail institucional" required>
-      <input type="password" id="senha" placeholder="Senha" required>
-      <button type="submit" class="btn-primary">Entrar</button>
+      <input type="password" id="senha" placeholder="Sua senha" required>
+      <button type="submit" class="btn-primary full-width">Entrar no Sistema</button>
     </form>
 
     <button id="btnEsqueci" class="btn-link">Esqueci minha senha</button>
     <p id="msgLogin" class="msg"></p>
   </div>
 
-  <!-- Modal Primeiro Acesso -->
   <div id="modalPrimeiroAcesso" class="modal hidden">
     <div class="modal-content">
       <h3>Primeiro Acesso</h3>
-      <p>Por segurança, cadastre uma nova senha pessoal (mín. 6 caracteres) para continuar.</p>
-      <input type="password" id="novaSenhaPrimeiro" placeholder="Nova senha">
-      <button id="btnSalvarPrimeiroAcesso" class="btn-primary">Salvar Nova Senha</button>
+      <p>Cadastre uma nova senha pessoal (mínimo 6 caracteres) para liberar o sistema.</p>
+      <input type="password" id="novaSenhaPrimeiro" placeholder="Nova senha pessoal">
+      <button id="btnSalvarPrimeiroAcesso" class="btn-primary full-width">Salvar e Entrar</button>
     </div>
   </div>
 
-  <!-- Modal Redefinição via Token -->
   <div id="modalReset" class="modal hidden">
     <div class="modal-content">
       <h3>Redefinir Senha</h3>
       <input type="password" id="novaSenhaReset" placeholder="Digite sua nova senha">
-      <button id="btnConfirmarReset" class="btn-primary">Confirmar</button>
+      <button id="btnConfirmarReset" class="btn-primary full-width">Confirmar Nova Senha</button>
     </div>
   </div>
 
