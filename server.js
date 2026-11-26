@@ -95,8 +95,7 @@ app.post('/api/alterar-senha', autenticar, async (req, res) => {
   res.json({ mensagem: 'Senha atualizada com sucesso.' });
 });
 
-app.post('/api/esqueci-senha', async
- (req, res) => {
+app.post('/api/esqueci-senha', async (req, res) => {
   const
  { email } = req.body;
   try
