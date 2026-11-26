@@ -45,13 +45,24 @@ if (document.getElementById('formLogin')) {
     location.href = '/dashboard.html';
   });
 
-  document.getElementById('btnEsqueci').addEventListener('click', async () => {
-    const email = prompt('Digite seu e-mail cadastrado:');
-    if (!email) return;
-    const res = await apiFetch('/api/esqueci-senha', { method: 'POST', body: JSON.stringify({ email }) });
-    const data = await res.json();
-    alert(data.mensagem || data.erro);
-  });
+ document.getElementById('btnEsqueci').addEventListener('click', async
+ () => {
+  const email = prompt('Digite seu e-mail cadastrado:'
+);
+  if (!email) return
+;
+  const res = await apiFetch('/api/esqueci-senha', { method: 'POST', body: JSON
+.stringify({ email }) });
+  const data = await
+ res.json();
+  const
+ texto = data.mensagem || data.erro;
+  const msgEl = document.getElementById('msgLogin'
+);
+  if
+ (msgEl) msgEl.textContent = texto;
+  alert(texto);
+});
 
   document.getElementById('btnConfirmarReset').addEventListener('click', async () => {
     const res = await apiFetch('/api/redefinir-senha', { method: 'POST', body: JSON.stringify({ token: resetToken, novaSenha: document.getElementById('novaSenhaReset').value }) });
