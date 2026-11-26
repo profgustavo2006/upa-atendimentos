@@ -10,43 +10,20 @@
 </head>
 <body class="app-body">
   <aside class="sidebar">
-    <div class="sidebar-brand">
-      <span class="brand-dot"></span>
-      <span>UPA Ferreira</span>
-    </div>
-
+    <div class="sidebar-brand"><span class="brand-dot"></span><span>UPA Ferreira</span></div>
     <nav class="sidebar-nav">
-      <button class="nav-item active" data-tab="tabLancamento" data-tip="Lançar e editar atendimentos médicos do dia">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-        Lançamento Diário
-      </button>
-      <button class="nav-item" data-tab="tabPlanilhas" data-tip="Visualizar as planilhas diária, semanal e mensal antes de baixar">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
-        Visualizar Planilhas
-      </button>
-      <button class="nav-item" data-tab="tabRelatorios" data-tip="Ver o gráfico de ranking dos médicos por período">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="7" rx="1"/><rect x="12" y="6" width="3" height="11" rx="1"/><rect x="17" y="13" width="3" height="4" rx="1"/></svg>
-        Gráficos
-      </button>
-      <button class="nav-item" data-tab="tabEscala" data-tip="Alterar a escala de médicos definindo a partir de qual data a mudança vale">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-        Gerenciar Escala
-      </button>
-      <button class="nav-item hidden" id="btnTabAdmin" data-tab="tabAdmin" data-tip="Cadastrar usuários, redefinir senhas e gerenciar lista de médicos">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-        Administração
-      </button>
+      <button class="nav-item active" data-tab="tabLancamento" title="Lançar atendimentos do dia">Lançamento Diário</button>
+      <button class="nav-item" data-tab="tabPlanilhas" title="Visualizar e baixar planilhas Excel">Planilhas & Excel</button>
+      <button class="nav-item" data-tab="tabRelatorios" title="Ver gráfico de ranking dos médicos">Gráficos</button>
+      <button class="nav-item" data-tab="tabEscala" title="Alterar escala médica a partir de uma data">Gerenciar Escala</button>
+      <button class="nav-item hidden" id="btnTabAdmin" data-tab="tabAdmin" title="Gerenciar usuários e médicos">Administração</button>
     </nav>
-
     <div class="sidebar-footer">
       <div class="user-pill">
         <div class="user-avatar" id="avatarLetra">U</div>
-        <div class="user-meta">
-          <strong id="infoUsuario">Usuário</strong>
-          <small id="infoRole">Acesso</small>
-        </div>
+        <div class="user-meta"><strong id="infoUsuario">Usuário</strong><small id="infoRole">Acesso</small></div>
       </div>
-      <button class="btn-logout" id="btnSair" data-tip="Encerrar sua sessão e voltar para a tela de login">Sair do Sistema</button>
+      <button class="btn-logout" id="btnSair" title="Encerrar sua sessão">Sair do Sistema</button>
     </div>
   </aside>
 
@@ -61,28 +38,11 @@
     </header>
 
     <main class="content-area">
-      <!-- CARTÕES KPI -->
       <section class="kpi-grid">
-        <div class="kpi-card kpi-blue">
-          <span class="kpi-label">Atendimentos no Dia</span>
-          <strong class="kpi-value" id="kpiDia">0</strong>
-          <span class="kpi-sub" id="kpiDiaSub">Data selecionada</span>
-        </div>
-        <div class="kpi-card">
-          <span class="kpi-label">Total na Semana</span>
-          <strong class="kpi-value" id="kpiSemana">0</strong>
-          <span class="kpi-sub" id="kpiSemanaSub">Domingo a Sábado</span>
-        </div>
-        <div class="kpi-card">
-          <span class="kpi-label">Total no Mês</span>
-          <strong class="kpi-value" id="kpiMes">0</strong>
-          <span class="kpi-sub" id="kpiMesSub">Mês vigente</span>
-        </div>
-        <div class="kpi-card">
-          <span class="kpi-label">Média por Médico (Dia)</span>
-          <strong class="kpi-value" id="kpiMedia">0</strong>
-          <span class="kpi-sub">Atendimentos / plantonista</span>
-        </div>
+        <div class="kpi-card kpi-blue"><span class="kpi-label">Atendimentos no Dia</span><strong class="kpi-value" id="kpiDia">0</strong><span class="kpi-sub" id="kpiDiaSub">-</span></div>
+        <div class="kpi-card"><span class="kpi-label">Total na Semana</span><strong class="kpi-value" id="kpiSemana">0</strong><span class="kpi-sub" id="kpiSemanaSub">-</span></div>
+        <div class="kpi-card"><span class="kpi-label">Total no Mês</span><strong class="kpi-value" id="kpiMes">0</strong><span class="kpi-sub">Mês vigente</span></div>
+        <div class="kpi-card"><span class="kpi-label">Média por Médico (Dia)</span><strong class="kpi-value" id="kpiMedia">0</strong><span class="kpi-sub">Atendimentos / plantonista</span></div>
       </section>
 
       <!-- ABA 1: LANÇAMENTO DIÁRIO -->
@@ -90,29 +50,20 @@
         <div class="surface-card">
           <div class="card-toolbar">
             <div class="date-box">
-              <label for="dataPlantao">Data do Plantão</label>
-              <div class="date-stepper">
-                <button class="btn-arrow" id="btnDiaAnterior" data-tip="Voltar para o dia anterior">◀</button>
-                <input type="date" id="dataPlantao">
-                <button class="btn-arrow" id="btnDiaProximo" data-tip="Avançar para o próximo dia">▶</button>
-              </div>
+              <button id="btnDiaAnterior" class="btn-soft" title="Voltar para o dia anterior">◀</button>
+              <input type="date" id="dataPlantao" title="Escolher data no calendário">
+              <button id="btnDiaProximo" class="btn-soft" title="Avançar para o próximo dia">▶</button>
             </div>
             <div class="toolbar-actions">
-              <button id="btnAddExtra" class="btn-soft" data-tip="Incluir um médico extra ou substituto neste dia">+ Médico Extra</button>
-              <button id="btnLimparDia" class="btn-danger-soft" data-tip="Zerar a quantidade de atendimentos de todos os médicos deste dia">Limpar Dia</button>
-              <button id="btnSalvarDia" class="btn-primary" data-tip="Gravar os atendimentos preenchidos no banco de dados">Salvar no Banco</button>
+              <button id="btnAddExtra" class="btn-soft" title="Incluir um médico extra neste dia">+ Médico Extra</button>
+              <button id="btnLimparDia" class="btn-mini danger" title="Zerar todos os atendimentos deste dia">Limpar Dia Todo</button>
+              <button id="btnSalvarDia" class="btn-primary" title="Gravar os atendimentos no banco de dados">Salvar no Banco</button>
             </div>
           </div>
-
           <div class="table-wrap">
             <table>
               <thead>
-                <tr>
-                  <th>Médico / Turno</th>
-                  <th>Troca de Plantão</th>
-                  <th style="width: 140px;">Atendimentos</th>
-                  <th style="width: 160px;">Ações</th>
-                </tr>
+                <tr><th>Médico / Turno</th><th>Troca de Plantão</th><th style="width:120px;">Atendimentos</th><th style="width:140px;">Ações</th></tr>
               </thead>
               <tbody id="tbodyEscala"></tbody>
             </table>
@@ -121,23 +72,23 @@
         </div>
       </section>
 
-      <!-- ABA 2: VISUALIZAR PLANILHAS E BAIXAR -->
+      <!-- ABA 2: PRÉVIA E DOWNLOAD DE PLANILHAS -->
       <section id="tabPlanilhas" class="tab-content hidden">
         <div class="surface-card">
           <div class="card-toolbar">
-            <div class="filter-group">
-              <button class="btn-soft" id="btnPrevDiaria" onclick="carregarPreview('diaria')" data-tip="Mostrar na tela a tabela do dia selecionado">Ver Diária</button>
-              <button class="btn-soft" id="btnPrevSemanal" onclick="carregarPreview('semanal')" data-tip="Mostrar na tela a tabela completa de Domingo a Sábado">Ver Semanal</button>
-              <button class="btn-soft" id="btnPrevMensal" onclick="carregarPreview('mensal')" data-tip="Mostrar na tela o resumo acumulado do mês">Ver Mensal</button>
+            <div class="toolbar-actions">
+              <button class="btn-soft" onclick="carregarPrevia('diaria')" title="Visualizar planilha do dia selecionado">Ver Diária</button>
+              <button class="btn-soft" onclick="carregarPrevia('semanal')" title="Visualizar planilha da semana">Ver Semanal</button>
+              <button class="btn-soft" onclick="carregarPrevia('mensal')" title="Visualizar planilha do mês">Ver Mensal</button>
             </div>
-            <div class="export-group">
-              <button class="btn-excel" onclick="exportarExcel('diaria')" data-tip="Baixar o arquivo Excel da planilha diária com gráfico">Baixar Diária (.xlsx)</button>
-              <button class="btn-excel" onclick="exportarExcel('semanal')" data-tip="Baixar o arquivo Excel da planilha semanal com gráfico">Baixar Semanal (.xlsx)</button>
-              <button class="btn-excel" onclick="exportarExcel('mensal')" data-tip="Baixar o arquivo Excel da planilha mensal com gráfico">Baixar Mensal (.xlsx)</button>
+            <div class="toolbar-actions">
+              <button class="btn-excel" onclick="exportarExcel('diaria')" title="Baixar arquivo Excel diário com gráfico">Baixar Diária</button>
+              <button class="btn-excel" onclick="exportarExcel('semanal')" title="Baixar arquivo Excel semanal com gráfico">Baixar Semanal</button>
+              <button class="btn-excel" onclick="exportarExcel('mensal')" title="Baixar arquivo Excel mensal com gráfico">Baixar Mensal</button>
             </div>
           </div>
-          <div id="previewHeader" class="preview-header"></div>
-          <div class="table-wrap" id="previewContainer"></div>
+          <h3 id="tituloPrevia" style="margin-bottom:12px;">Selecione uma planilha acima para visualizar</h3>
+          <div class="table-wrap" id="areaPrevia"></div>
         </div>
       </section>
 
@@ -148,12 +99,10 @@
             <div class="filter-group">
               <label>Início <input type="date" id="filtroInicio"></label>
               <label>Fim <input type="date" id="filtroFim"></label>
-              <button id="btnAtualizarGrafico" class="btn-primary" data-tip="Recarregar o gráfico de barras para o período selecionado">Atualizar Gráfico</button>
+              <button id="btnAtualizarGrafico" class="btn-primary" title="Atualizar gráfico com as datas escolhidas">Atualizar Gráfico</button>
             </div>
           </div>
-          <div class="chart-container">
-            <canvas id="graficoRanking"></canvas>
-          </div>
+          <div class="chart-container"><canvas id="graficoRanking"></canvas></div>
         </div>
       </section>
 
@@ -161,34 +110,21 @@
       <section id="tabEscala" class="tab-content hidden">
         <div class="surface-card">
           <h3>Alterar Escala Médica (por Data de Vigência)</h3>
-          <p class="card-hint">Alterações feitas aqui passam a valer somente a partir da data escolhida, sem alterar os dias anteriores.</p>
-          <div class="card-toolbar">
-            <div class="filter-group">
-              <label>Vale a partir de: <input type="date" id="escalaDataVigencia"></label>
-              <label>Dia da Semana:
-                <select id="escalaDiaSemana">
-                  <option value="0">Domingo</option>
-                  <option value="1">Segunda-feira</option>
-                  <option value="2">Terça-feira</option>
-                  <option value="3">Quarta-feira</option>
-                  <option value="4">Quinta-feira</option>
-                  <option value="5">Sexta-feira</option>
-                  <option value="6">Sábado</option>
-                </select>
-              </label>
-            </div>
-          </div>
-
-          <form id="formAddEscala" class="inline-form">
-            <select id="escalaMedicoSelect" required></select>
-            <select id="escalaTurnoSelect">
-              <option value="24h">Plantão 24h</option>
-              <option value="12h Dia (07h-19h)">12h Dia (07h às 19h)</option>
-              <option value="12h Noite (19h-07h)">12h Noite (19h às 07h)</option>
+          <p class="card-hint">Alterações feitas aqui passam a valer somente a partir da data escolhida, preservando os dias anteriores.</p>
+          <div class="inline-form">
+            <select id="escalaDiaSemana" title="Dia da semana">
+              <option value="0">Domingo</option><option value="1">Segunda-feira</option><option value="2">Terça-feira</option>
+              <option value="3">Quarta-feira</option><option value="4">Quinta-feira</option><option value="5">Sexta-feira</option><option value="6">Sábado</option>
             </select>
-            <button type="submit" class="btn-primary" data-tip="Incluir este médico na escala a partir da data selecionada">Adicionar à Escala</button>
-          </form>
-
+            <input type="date" id="escalaDataVigencia" title="A partir de qual data essa mudança vale">
+            <select id="escalaMedicoId" title="Escolha o médico"></select>
+            <select id="escalaTurno" title="Turno do plantão">
+              <option value="24h">24h</option>
+              <option value="12h Dia (07h-19h)">12h Dia (07h-19h)</option>
+              <option value="12h Noite (19h-07h)">12h Noite (19h-07h)</option>
+            </select>
+            <button id="btnAddEscala" class="btn-primary" title="Incluir médico na escala a partir desta data">Adicionar à Escala</button>
+          </div>
           <ul id="listaEscalaDia" class="admin-list"></ul>
         </div>
       </section>
@@ -202,21 +138,16 @@
             <form id="formNovoUsuario" class="inline-form">
               <input type="text" id="usrNome" placeholder="Nome completo" required>
               <input type="email" id="usrEmail" placeholder="E-mail" required>
-              <select id="usrRole">
-                <option value="comum">Usuário Comum</option>
-                <option value="admin">Administrador</option>
-              </select>
-              <button type="submit" class="btn-primary" data-tip="Criar novo acesso com senha inicial upa123">Cadastrar</button>
+              <select id="usrRole"><option value="comum">Usuário Comum</option><option value="admin">Administrador</option></select>
+              <button type="submit" class="btn-primary" title="Criar novo acesso">Cadastrar</button>
             </form>
             <ul id="listaUsuarios" class="admin-list"></ul>
           </div>
-
           <div class="surface-card">
             <h3>Cadastro de Médicos</h3>
-            <p class="card-hint">Médicos ativos disponíveis na escala e nas trocas de plantão.</p>
             <form id="formNovoMedico" class="inline-form">
-              <input type="text" id="medNome" placeholder="Nome do Médico (ex: Dr. João Silva)" required>
-              <button type="submit" class="btn-primary" data-tip="Adicionar um novo médico à lista geral da UPA">Adicionar</button>
+              <input type="text" id="medNome" placeholder="Nome do Médico" required>
+              <button type="submit" class="btn-primary" title="Adicionar médico ao cadastro geral">Adicionar</button>
             </form>
             <ul id="listaMedicos" class="admin-list"></ul>
           </div>
@@ -225,10 +156,7 @@
     </main>
   </div>
 
-  <!-- Tooltip flutuante (aparece após 3 segundos com o mouse parado) -->
-  <div id="customTooltip" class="custom-tooltip hidden"></div>
   <canvas id="canvasExcel" width="900" height="430" class="hidden"></canvas>
-
   <script src="app.js"></script>
 </body>
 </html>
