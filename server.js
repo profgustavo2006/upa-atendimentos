@@ -11,7 +11,7 @@ const nodemailer = require('nodemailer');
 
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: '5mb' })); // Permite enviar a imagem do gráfico para o Excel
+app.use(express.json({ limit: '5mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 const pool = new Pool({
@@ -25,7 +25,7 @@ const SENHA_PADRAO = 'upa123';
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || 'smtp.gmail.com',
   port: Number(process.env.SMTP_PORT || 587),
-  secure: false,
+  secure: Number(process.env.SMTP_PORT) === 465,
   auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
 });
 
@@ -114,23 +114,36 @@ app.post('/api/alterar-senha', autenticar, async (req, res) => {
 
 app.post('/api/esqueci-senha', async (req, res) => {
   const { email } = req.body;
-  const { rows } = await pool.query('SELECT id, nome, email FROM usuarios WHERE LOWER(email) = LOWER($1)', [email]);
-  if (rows.length === 0) return res.json({ mensagem: 'Se o e-mail estiver cadastrado, você receberá um link de redefinição.' });
+  try {
+    const { rows } = await pool.query('SELECT id, nome, email FROM usuarios WHERE LOWER(email) = LOWER($1)', [email]);
+    if (rows.length === 0) {
+      return res.json({ mensagem: 'Se o e-mail estiver cadastrado, você receberá um link de redefinição.' });
+    }
+    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+      return res.status(500).json({ erro: 'Envio de e-mail ainda não configurado no Render (SMTP_USER e SMTP_PASS).' });
+    }
 
-  const token = crypto.randomBytes(24).toString('hex');
-  const expira = new Date(Date.now() + 60 * 60 * 1000);
-  await pool.query('UPDATE usuarios SET reset_token = $1, reset_expira = $2 WHERE id = $3', [token, expira, rows[0].id]);
+    const token = crypto.randomBytes(24).toString('hex');
+    const expira = new Date(Date.now() + 60 * 60 * 1000);
+    await pool.query('UPDATE usuarios SET reset_token = $1, reset_expira = $2 WHERE id = $3', [token, expira, rows[0].id]);
 
-  const link = `${process.env.APP_URL || 'http://localhost:3000'}/?resetToken=${token}`;
-  if (process.env.SMTP_USER) {
+    const baseUrl = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
+    const link = `${baseUrl}/?resetToken=${token}`;
+
     await transporter.sendMail({
       from: `"UPA Parque dos Ferreira" <${process.env.SMTP_USER}>`,
       to: rows[0].email,
       subject: 'Redefinição de Senha - UPA Parque dos Ferreira',
-      html: `<p>Olá, ${rows[0].nome}.</p><p>Clique no link para redefinir sua senha (válido por 1 hora):</p><p><a href="${link}">${link}</a></p>`
+      html: `<p>Olá, <strong>${rows[0].nome}</strong>.</p>
+             <p>Clique no botão abaixo para redefinir sua senha (válido por 1 hora):</p>
+             <p><a href="${link}" style="background:#155eef;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;display:inline-block;">Redefinir Minha Senha</a></p>
+             <p>Ou copie este link: ${link}</p>`
     });
+    res.json({ mensagem: 'Link de redefinição enviado para o seu e-mail! Verifique também a caixa de spam.' });
+  } catch (err) {
+    console.error('Erro SMTP:', err);
+    res.status(500).json({ erro: 'Falha ao enviar o e-mail. Confira SMTP_USER e SMTP_PASS no Render.' });
   }
-  res.json({ mensagem: 'Se o e-mail estiver cadastrado, você receberá um link de redefinição.' });
 });
 
 app.post('/api/redefinir-senha', async (req, res) => {
@@ -198,13 +211,16 @@ app.get('/api/medicos', autenticar, async (req, res) => {
   res.json(rows);
 });
 
-app.post('/api/medicos', autenticar, apenasAdmin, async (req, res) => {
-  const { nome, matriculas } = req.body;
+app.post('/api/medicos', autenticar, async (req, res) => {
+  const { nome } = req.body;
   try {
-    const { rows } = await pool.query('INSERT INTO medicos (nome, matriculas) VALUES ($1, $2) RETURNING *', [nome, matriculas || null]);
+    const { rows } = await pool.query(
+      'INSERT INTO medicos (nome, ativo) VALUES ($1, TRUE) ON CONFLICT (nome) DO UPDATE SET ativo = TRUE RETURNING *',
+      [nome.trim()]
+    );
     res.status(201).json(rows[0]);
   } catch {
-    res.status(400).json({ erro: 'Médico já cadastrado.' });
+    res.status(400).json({ erro: 'Erro ao cadastrar médico.' });
   }
 });
 
@@ -213,7 +229,54 @@ app.delete('/api/medicos/:id', autenticar, apenasAdmin, async (req, res) => {
   res.json({ mensagem: 'Médico desativado.' });
 });
 
-// ==================== RESUMO KPI (DIA, SEMANA, MÊS) ====================
+// ==================== GERENCIAR ESCALA COM VIGÊNCIA POR DATA ====================
+
+app.get('/api/escala', autenticar, async (req, res) => {
+  const { diaSemana, dataVigencia } = req.query;
+  const dataRef = dataVigencia || new Date().toISOString().split('T')[0];
+  const { rows } = await pool.query(
+    `SELECT e.id, e.dia_semana, e.medico_id, m.nome, e.turno,
+            TO_CHAR(e.vigencia_inicio, 'YYYY-MM-DD') AS vigencia_inicio
+     FROM escala_padrao e
+     JOIN medicos m ON m.id = e.medico_id
+     WHERE e.dia_semana = $1
+       AND e.ativo = TRUE
+       AND e.vigencia_inicio <= $2::date
+       AND (e.vigencia_fim IS NULL OR e.vigencia_fim >= $2::date)
+     ORDER BY e.turno, m.nome`,
+    [Number(diaSemana), dataRef]
+  );
+  res.json(rows);
+});
+
+app.post('/api/escala', autenticar, async (req, res) => {
+  const { dia_semana, medico_id, turno, vigencia_inicio } = req.body;
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO escala_padrao (dia_semana, medico_id, turno, vigencia_inicio, ativo)
+       VALUES ($1, $2, $3, $4, TRUE) RETURNING *`,
+      [Number(dia_semana), Number(medico_id), turno || '24h', vigencia_inicio]
+    );
+    res.status(201).json(rows[0]);
+  } catch {
+    res.status(400).json({ erro: 'Erro ao adicionar médico na escala.' });
+  }
+});
+
+app.delete('/api/escala/:id', autenticar, async (req, res) => {
+  const { dataVigencia } = req.query;
+  const dataCorte = dataVigencia || new Date().toISOString().split('T')[0];
+  // Encerra a vigência no dia anterior à data de mudança, preservando o passado intacto
+  await pool.query(
+    `UPDATE escala_padrao
+     SET vigencia_fim = ($1::date - INTERVAL '1 day')::date
+     WHERE id = $2`,
+    [dataCorte, Number(req.params.id)]
+  );
+  res.json({ mensagem: 'Médico removido da escala a partir desta data.' });
+});
+
+// ==================== RESUMO KPI ====================
 
 app.get('/api/resumo', autenticar, async (req, res) => {
   const { dia, inicioSemana, fimSemana, inicioMes, fimMes } = calcularIntervalos(req.query.data);
@@ -255,12 +318,16 @@ app.get('/api/atendimentos', autenticar, async (req, res) => {
   const escala = await pool.query(
     `SELECT e.id AS escala_id, e.medico_id AS medico_escalado_id,
             e.medico_id AS medico_real_id, m.nome AS nome_escalado,
-            m.nome AS nome_real, e.matricula_plantao, 0 AS quantidade, NULL AS medico_extra_nome
+            m.nome AS nome_real, e.turno, 0 AS quantidade, NULL AS medico_extra_nome
      FROM escala_padrao e
      JOIN medicos m ON m.id = e.medico_id
-     WHERE e.dia_semana = $1 AND e.ativo = TRUE AND m.ativo = TRUE
-     ORDER BY m.nome`,
-    [diaSemana]
+     WHERE e.dia_semana = $1
+       AND e.ativo = TRUE
+       AND m.ativo = TRUE
+       AND e.vigencia_inicio <= $2::date
+       AND (e.vigencia_fim IS NULL OR e.vigencia_fim >= $2::date)
+     ORDER BY e.turno, m.nome`,
+    [diaSemana, data]
   );
   res.json({ origem: 'escala', itens: escala.rows });
 });
@@ -274,14 +341,15 @@ app.post('/api/atendimentos', autenticar, async (req, res) => {
     for (const item of itens) {
       await client.query(
         `INSERT INTO atendimentos
-          (data, escala_id, medico_escalado_id, medico_real_id, medico_extra_nome, quantidade, registrado_por)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          (data, escala_id, medico_escalado_id, medico_real_id, medico_extra_nome, turno, quantidade, registrado_por)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
         [
           data,
           item.escala_id || null,
           item.medico_escalado_id || null,
           item.medico_extra_nome ? null : (item.medico_real_id || item.medico_escalado_id),
           item.medico_extra_nome?.trim() || null,
+          item.turno || '24h',
           Number(item.quantidade || 0),
           req.user.id
         ]
@@ -289,15 +357,16 @@ app.post('/api/atendimentos', autenticar, async (req, res) => {
     }
     await client.query('COMMIT');
     res.json({ mensagem: 'Atendimentos salvos com sucesso!' });
-  } catch {
+  } catch (err) {
     await client.query('ROLLBACK');
+    console.error(err);
     res.status(500).json({ erro: 'Erro ao salvar atendimentos.' });
   } finally {
     client.release();
   }
 });
 
-// ==================== GRÁFICO (AGRUPADO POR PROFISSIONAL) ====================
+// ==================== GRÁFICO ====================
 
 app.get('/api/ranking', autenticar, async (req, res) => {
   const { inicio, fim } = req.query;
@@ -316,46 +385,13 @@ app.get('/api/ranking', autenticar, async (req, res) => {
   res.json(rows);
 });
 
-// ==================== EXPORTAÇÃO EXCEL (MODELO UPA + GRÁFICO) ====================
+// ==================== DADOS UNIFICADOS (PRÉ-VISUALIZAÇÃO + EXCEL) ====================
 
-app.post('/api/exportar', autenticar, async (req, res) => {
-  const { periodo, dataRef, chartBase64 } = req.body;
+async function montarDadosPlanilha(periodo, dataRef) {
   const { dia, inicioSemana, fimSemana, inicioMes, fimMes } = calcularIntervalos(dataRef);
   const fmtBR = (iso) => iso.split('-').reverse().join('/');
 
-  const wb = new ExcelJS.Workbook();
-  const azulEscuro = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F4E78' } };
-  const amareloClaro = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF2CC' } };
-  const cinzaClaro = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F4F7' } };
-  const bordaFina = {
-    top: { style: 'thin', color: { argb: 'FFD0D7DE' } },
-    left: { style: 'thin', color: { argb: 'FFD0D7DE' } },
-    bottom: { style: 'thin', color: { argb: 'FFD0D7DE' } },
-    right: { style: 'thin', color: { argb: 'FFD0D7DE' } }
-  };
-
-  let ws;
-  let linhaGrafico = 15;
-
   if (periodo === 'semanal') {
-    const nomeAba = `${inicioSemana.slice(8, 10)}-${inicioSemana.slice(5, 7)} a ${fimSemana.slice(8, 10)}-${fimSemana.slice(5, 7)}`;
-    ws = wb.addWorksheet(nomeAba);
-
-    // Título idêntico ao modelo
-    ws.mergeCells('A1:K1');
-    ws.getCell('A1').value = 'CONTROLE DE ATENDIMENTOS MÉDICOS POR DIA DA SEMANA – UPA PARQUE DOS FERREIRA';
-    ws.getCell('A1').fill = azulEscuro;
-    ws.getCell('A1').font = { bold: true, size: 13, color: { argb: 'FFFFFFFF' } };
-    ws.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
-    ws.getRow(1).height = 28;
-
-    ws.getCell('A2').value = 'Semana de:';
-    ws.getCell('A2').font = { bold: true };
-    ws.getCell('B2').value = fmtBR(inicioSemana);
-    ws.getCell('C2').value = 'a';
-    ws.getCell('C2').alignment = { horizontal: 'center' };
-    ws.getCell('D2').value = fmtBR(fimSemana);
-
     const diasSemana = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
     const datasSemana = [];
     const base = new Date(`${inicioSemana}T12:00:00`);
@@ -365,23 +401,13 @@ app.post('/api/exportar', autenticar, async (req, res) => {
       datasSemana.push(d.toISOString().split('T')[0]);
     }
 
-    const r4 = ws.getRow(4);
-    r4.values = ['Médico(a)', ...diasSemana, 'Total da Semana', 'Média Diária', 'Dias na Escala'];
-    const r5 = ws.getRow(5);
-    r5.values = ['Data', ...datasSemana.map(fmtBR), '', '', ''];
-
-    [r4, r5].forEach((r) => {
-      r.eachCell((c) => {
-        c.fill = azulEscuro;
-        c.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-        c.alignment = { horizontal: 'center', vertical: 'middle' };
-        c.border = bordaFina;
-      });
-    });
-
     const [medicosRes, escalaRes, atendRes] = await Promise.all([
       pool.query('SELECT id, nome FROM medicos WHERE ativo = TRUE ORDER BY nome'),
-      pool.query('SELECT dia_semana, medico_id FROM escala_padrao WHERE ativo = TRUE'),
+      pool.query(
+        `SELECT dia_semana, medico_id FROM escala_padrao
+         WHERE ativo = TRUE AND vigencia_inicio <= $1::date AND (vigencia_fim IS NULL OR vigencia_fim >= $2::date)`,
+        [fimSemana, inicioSemana]
+      ),
       pool.query(
         `SELECT TO_CHAR(a.data, 'YYYY-MM-DD') AS data_str,
                 COALESCE(m.nome, a.medico_extra_nome) AS nome,
@@ -403,199 +429,294 @@ app.post('/api/exportar', autenticar, async (req, res) => {
     const atendMapa = {};
     const extras = new Set();
     const nomesCadastrados = new Set(medicosRes.rows.map((m) => m.nome));
-
     atendRes.rows.forEach((r) => {
       atendMapa[`${r.nome}|${r.data_str}`] = r.qtd;
       if (r.nome && !nomesCadastrados.has(r.nome)) extras.add(r.nome);
     });
 
-    const listaFinal = [
-      ...medicosRes.rows.map((m) => ({ nome: m.nome, diasEscala: escalaPorMedico[m.id] || new Set() })),
-      ...Array.from(extras).map((nome) => ({ nome, diasEscala: new Set() }))
-    ];
+    const linhas = [
+      ...medicosRes.rows.map((m) => ({ nome: m.nome, diasEscala: Array.from(escalaPorMedico[m.id] || []) })),
+      ...Array.from(extras).map((nome) => ({ nome, diasEscala: [] }))
+    ].map((med) => {
+      const valores = datasSemana.map((dt) => (atendMapa[`${med.nome}|${dt}`] !== undefined ? atendMapa[`${med.nome}|${dt}`] : null));
+      const preenchidos = valores.filter((v) => v !== null);
+      const total = preenchidos.reduce((a, b) => a + b, 0);
+      const media = preenchidos.length ? Number((total / preenchidos.length).toFixed(1)) : 0;
+      return { nome: med.nome, diasEscala: med.diasEscala, valores, total, media, qtdEscala: med.diasEscala.length };
+    });
 
-    let rowIdx = 6;
-    listaFinal.forEach((med) => {
-      const row = ws.getRow(rowIdx);
-      row.getCell(1).value = med.nome;
-      row.getCell(1).font = { bold: true };
-      row.getCell(1).border = bordaFina;
+    const escalaPorDia = [0, 1, 2, 3, 4, 5, 6].map((d) => escalaRes.rows.filter((e) => e.dia_semana === d).length);
 
-      for (let d = 0; d < 7; d++) {
-        const cell = row.getCell(d + 2);
-        const val = atendMapa[`${med.nome}|${datasSemana[d]}`];
-        const naEscala = med.diasEscala.has(d);
-        if (val !== undefined) {
-          cell.value = val;
-          cell.fill = amareloClaro;
-          cell.font = { color: { argb: 'FF0000FF' }, bold: true };
-        } else if (naEscala) {
-          cell.fill = amareloClaro;
-        } else {
-          cell.value = '–';
-          cell.fill = cinzaClaro;
-          cell.font = { color: { argb: 'FF999999' } };
+    return {
+      periodo,
+      titulo: 'CONTROLE DE ATENDIMENTOS MÉDICOS POR DIA DA SEMANA – UPA PARQUE DOS FERREIRA',
+      subtitulo: `Semana de ${fmtBR(inicioSemana)} a ${fmtBR(fimSemana)}`,
+      inicioSemana,
+      fimSemana,
+      diasSemana,
+      datasSemana: datasSemana.map(fmtBR),
+      linhas,
+      escalaPorDia
+    };
+  }
+
+  const isDiaria = periodo === 'diaria';
+  const ini = isDiaria ? dia : inicioMes;
+  const fim = isDiaria ? dia : fimMes;
+  const query = isDiaria
+    ? `SELECT COALESCE(mr.nome, a.medico_extra_nome) AS medico,
+              COALESCE(a.turno, '24h') AS turno,
+              CASE WHEN a.medico_extra_nome IS NOT NULL THEN 'Extra/Substituto'
+                   WHEN a.medico_real_id <> a.medico_escalado_id THEN 'Troca de Plantão'
+                   ELSE 'Escala Normal' END AS status,
+              a.quantidade::INT AS total
+       FROM atendimentos a
+       LEFT JOIN medicos mr ON mr.id = a.medico_real_id
+       WHERE a.data = $1 ORDER BY total DESC`
+    : `SELECT COALESCE(mr.nome, a.medico_extra_nome) AS medico,
+              COUNT(DISTINCT a.data)::INT AS dias,
+              SUM(a.quantidade)::INT AS total
+       FROM atendimentos a
+       LEFT JOIN medicos mr ON mr.id = a.medico_real_id
+       WHERE a.data BETWEEN $1 AND $2 AND a.quantidade > 0
+       GROUP BY medico ORDER BY total DESC`;
+
+  const { rows } = await pool.query(query, isDiaria ? [dia] : [ini, fim]);
+  return {
+    periodo,
+    titulo: `CONTROLE DE ATENDIMENTOS (${isDiaria ? 'DIÁRIO' : 'MENSAL'}) – UPA PARQUE DOS FERREIRA`,
+    subtitulo: isDiaria ? `Data: ${fmtBR(dia)}` : `Período: ${fmtBR(ini)} a ${fmtBR(fim)}`,
+    dia,
+    inicioMes,
+    fimMes,
+    linhas: rows
+  };
+}
+
+app.get('/api/preview-planilha', autenticar, async (req, res) => {
+  try {
+    const dados = await montarDadosPlanilha(req.query.periodo || 'diaria', req.query.dataRef);
+    res.json(dados);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ erro: 'Erro ao gerar pré-visualização.' });
+  }
+});
+
+app.post('/api/exportar', autenticar, async (req, res) => {
+  try {
+    const { periodo, dataRef, chartBase64 } = req.body;
+    const dados = await montarDadosPlanilha(periodo || 'diaria', dataRef);
+
+    const wb = new ExcelJS.Workbook();
+    const azulEscuro = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F4E78' } };
+    const amareloClaro = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF2CC' } };
+    const cinzaClaro = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F4F7' } };
+    const rodapeFundo = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8EEF5' } };
+    const bordaFina = {
+      top: { style: 'thin', color: { argb: 'FFD0D7DE' } },
+      left: { style: 'thin', color: { argb: 'FFD0D7DE' } },
+      bottom: { style: 'thin', color: { argb: 'FFD0D7DE' } },
+      right: { style: 'thin', color: { argb: 'FFD0D7DE' } }
+    };
+
+    let ws;
+    let linhaGrafico = 15;
+
+    if (periodo === 'semanal') {
+      const nomeAba = `${dados.inicioSemana.slice(8, 10)}-${dados.inicioSemana.slice(5, 7)} a ${dados.fimSemana.slice(8, 10)}-${dados.fimSemana.slice(5, 7)}`;
+      ws = wb.addWorksheet(nomeAba);
+
+      ws.mergeCells('A1:K1');
+      ws.getCell('A1').value = dados.titulo;
+      ws.getCell('A1').fill = azulEscuro;
+      ws.getCell('A1').font = { bold: true, size: 12, color: { argb: 'FFFFFFFF' } };
+      ws.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
+      ws.getRow(1).height = 28;
+
+      ws.mergeCells('A2:K2');
+      ws.getCell('A2').value = dados.subtitulo;
+      ws.getCell('A2').font = { bold: true };
+
+      const r4 = ws.getRow(4);
+      r4.values = ['Médico(a)', ...dados.diasSemana, 'Total da Semana', 'Média Diária', 'Dias na Escala'];
+      const r5 = ws.getRow(5);
+      r5.values = ['Data', ...dados.datasSemana, '', '', ''];
+
+      [r4, r5].forEach((r) => {
+        for (let c = 1; c <= 11; c++) {
+          const cell = r.getCell(c);
+          cell.fill = azulEscuro;
+          cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+          cell.border = bordaFina;
         }
+      });
+
+      let rowIdx = 6;
+      dados.linhas.forEach((med) => {
+        const row = ws.getRow(rowIdx);
+        row.getCell(1).value = med.nome;
+        row.getCell(1).font = { bold: true };
+        row.getCell(1).border = bordaFina;
+
+        for (let d = 0; d < 7; d++) {
+          const cell = row.getCell(d + 2);
+          const val = med.valores[d];
+          const naEscala = med.diasEscala.includes(d);
+          if (val !== null) {
+            cell.value = val;
+            cell.fill = amareloClaro;
+            cell.font = { color: { argb: 'FF0000FF' }, bold: true };
+          } else if (naEscala) {
+            cell.fill = amareloClaro;
+          } else {
+            cell.value = '–';
+            cell.fill = cinzaClaro;
+            cell.font = { color: { argb: 'FF999999' } };
+          }
+          cell.alignment = { horizontal: 'center' };
+          cell.border = bordaFina;
+        }
+
+        row.getCell(9).value = { formula: `SUM(B${rowIdx}:H${rowIdx})` };
+        row.getCell(10).value = { formula: `IF(COUNT(B${rowIdx}:H${rowIdx})=0,0,AVERAGE(B${rowIdx}:H${rowIdx}))` };
+        row.getCell(10).numFmt = '0.0';
+        row.getCell(11).value = med.qtdEscala;
+        for (let c = 9; c <= 11; c++) {
+          row.getCell(c).alignment = { horizontal: 'center' };
+          row.getCell(c).border = bordaFina;
+          if (c === 9) row.getCell(c).font = { bold: true };
+        }
+        rowIdx++;
+      });
+
+      const lastDataRow = Math.max(6, rowIdx - 1);
+      const rTotal = ws.getRow(rowIdx);
+      const rEscala = ws.getRow(rowIdx + 1);
+      const rMedia = ws.getRow(rowIdx + 2);
+      rTotal.getCell(1).value = 'TOTAL DO DIA';
+      rEscala.getCell(1).value = 'MÉDICOS NA ESCALA';
+      rMedia.getCell(1).value = 'MÉDIA POR MÉDICO ESCALADO';
+
+      const cols = ['B', 'C', 'D', 'E', 'F', 'G', 'H'];
+      cols.forEach((colLet, idx) => {
+        const c = idx + 2;
+        rTotal.getCell(c).value = { formula: `SUM(${colLet}6:${colLet}${lastDataRow})` };
+        rEscala.getCell(c).value = dados.escalaPorDia[idx];
+        rMedia.getCell(c).value = { formula: `IF(${colLet}${rowIdx + 1}=0,0,${colLet}${rowIdx}/${colLet}${rowIdx + 1})` };
+        rMedia.getCell(c).numFmt = '0.0';
+      });
+
+      rTotal.getCell(9).value = { formula: `SUM(B${rowIdx}:H${rowIdx})` };
+      rEscala.getCell(9).value = { formula: `SUM(B${rowIdx + 1}:H${rowIdx + 1})` };
+      rMedia.getCell(9).value = { formula: `IF(I${rowIdx + 1}=0,0,I${rowIdx}/I${rowIdx + 1})` };
+      rMedia.getCell(9).numFmt = '0.0';
+
+      [rTotal, rEscala, rMedia].forEach((r) => {
+        for (let c = 1; c <= 11; c++) {
+          const cell = r.getCell(c);
+          cell.font = { bold: true };
+          cell.fill = rodapeFundo;
+          cell.alignment = { horizontal: c === 1 ? 'left' : 'center' };
+          cell.border = bordaFina;
+        }
+      });
+
+      ws.columns = [
+        { width: 28 }, { width: 14 }, { width: 15 }, { width: 14 }, { width: 14 },
+        { width: 14 }, { width: 14 }, { width: 14 }, { width: 16 }, { width: 15 }, { width: 15 }
+      ];
+      linhaGrafico = rowIdx + 4;
+    } else {
+      const isDiaria = periodo === 'diaria';
+      ws = wb.addWorksheet(isDiaria ? `Dia ${dados.dia.slice(8, 10)}-${dados.dia.slice(5, 7)}` : `Mes ${dados.inicioMes.slice(5, 7)}-${dados.inicioMes.slice(0, 4)}`);
+
+      // Título termina exatamente na coluna D (mesma coluna do conteúdo)
+      ws.mergeCells('A1:D1');
+      ws.getCell('A1').value = dados.titulo;
+      ws.getCell('A1').fill = azulEscuro;
+      ws.getCell('A1').font = { bold: true, size: 12, color: { argb: 'FFFFFFFF' } };
+      ws.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
+      ws.getRow(1).height = 28;
+
+      ws.mergeCells('A2:D2');
+      ws.getCell('A2').value = dados.subtitulo;
+      ws.getCell('A2').font = { bold: true };
+
+      const headerRow = ws.getRow(4);
+      headerRow.values = isDiaria
+        ? ['Médico(a)', 'Turno', 'Tipo / Status', 'Atendimentos']
+        : ['Médico(a)', 'Dias Trabalhados', 'Total no Mês', 'Média Diária'];
+
+      for (let c = 1; c <= 4; c++) {
+        const cell = headerRow.getCell(c);
+        cell.fill = azulEscuro;
+        cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
         cell.alignment = { horizontal: 'center' };
         cell.border = bordaFina;
       }
 
-      row.getCell(9).value = { formula: `SUM(B${rowIdx}:H${rowIdx})` };
-      row.getCell(10).value = { formula: `IF(COUNT(B${rowIdx}:H${rowIdx})=0,0,AVERAGE(B${rowIdx}:H${rowIdx}))` };
-      row.getCell(10).numFmt = '0.0';
-      row.getCell(11).value = med.diasEscala.size;
-      [9, 10, 11].forEach((col) => {
-        row.getCell(col).alignment = { horizontal: 'center' };
-        row.getCell(col).border = bordaFina;
-        row.getCell(col).font = { bold: col === 9 };
+      let rowIdx = 5;
+      dados.linhas.forEach((r) => {
+        const row = ws.getRow(rowIdx);
+        if (isDiaria) {
+          row.values = [r.medico, r.turno, r.status, r.total];
+          row.getCell(4).fill = amareloClaro;
+          row.getCell(4).font = { bold: true, color: { argb: 'FF0000FF' } };
+        } else {
+          row.values = [r.medico, r.dias, r.total, { formula: `IF(B${rowIdx}=0,0,C${rowIdx}/B${rowIdx})` }];
+          row.getCell(3).fill = amareloClaro;
+          row.getCell(3).font = { bold: true, color: { argb: 'FF0000FF' } };
+          row.getCell(4).numFmt = '0.0';
+        }
+        for (let c = 1; c <= 4; c++) {
+          row.getCell(c).border = bordaFina;
+          if (c > 1) row.getCell(c).alignment = { horizontal: 'center' };
+        }
+        rowIdx++;
       });
-      rowIdx++;
-    });
 
-    const lastDataRow = rowIdx - 1;
-    const rTotal = ws.getRow(rowIdx);
-    rTotal.getCell(1).value = 'TOTAL DO DIA';
-    const rEscala = ws.getRow(rowIdx + 1);
-    rEscala.getCell(1).value = 'MÉDICOS NA ESCALA';
-    const rMedia = ws.getRow(rowIdx + 2);
-    rMedia.getCell(1).value = 'MÉDIA POR MÉDICO ESCALADO';
-
-    const cols = ['B', 'C', 'D', 'E', 'F', 'G', 'H'];
-    cols.forEach((colLet, idx) => {
-      const c = idx + 2;
-      const qtdEscalaDia = escalaRes.rows.filter((e) => e.dia_semana === idx).length;
-      rTotal.getCell(c).value = { formula: `SUM(${colLet}6:${colLet}${lastDataRow})` };
-      rEscala.getCell(c).value = qtdEscalaDia;
-      rMedia.getCell(c).value = { formula: `IF(${colLet}${rowIdx + 1}=0,0,${colLet}${rowIdx}/${colLet}${rowIdx + 1})` };
-      rMedia.getCell(c).numFmt = '0.0';
-    });
-
-    rTotal.getCell(9).value = { formula: `SUM(B${rowIdx}:H${rowIdx})` };
-    rEscala.getCell(9).value = { formula: `SUM(B${rowIdx + 1}:H${rowIdx + 1})` };
-    rMedia.getCell(9).value = { formula: `IF(I${rowIdx + 1}=0,0,I${rowIdx}/I${rowIdx + 1})` };
-    rMedia.getCell(9).numFmt = '0.0';
-
-    [rTotal, rEscala, rMedia].forEach((r) => {
-      r.eachCell((cell) => {
-        cell.font = { bold: true };
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8EEF5' } };
-        cell.alignment = { horizontal: cell.col === 1 ? 'left' : 'center' };
-        cell.border = bordaFina;
-      });
-    });
-
-    ws.columns = [
-      { width: 28 }, { width: 14 }, { width: 15 }, { width: 14 }, { width: 14 },
-      { width: 14 }, { width: 14 }, { width: 14 }, { width: 16 }, { width: 15 }, { width: 15 }
-    ];
-    linhaGrafico = rowIdx + 4;
-  } else {
-    // DIÁRIA ou MENSAL (com o mesmo visual oficial + gráfico na mesma aba)
-    const isDiaria = periodo === 'diaria';
-    const ini = isDiaria ? dia : inicioMes;
-    const fim = isDiaria ? dia : fimMes;
-    ws = wb.addWorksheet(isDiaria ? `Dia ${dia.slice(8, 10)}-${dia.slice(5, 7)}` : `Mes ${inicioMes.slice(5, 7)}-${inicioMes.slice(0, 4)}`);
-
-    ws.mergeCells('A1:E1');
-    ws.getCell('A1').value = `CONTROLE DE ATENDIMENTOS (${isDiaria ? 'DIÁRIO' : 'MENSAL'}) – UPA PARQUE DOS FERREIRA`;
-    ws.getCell('A1').fill = azulEscuro;
-    ws.getCell('A1').font = { bold: true, size: 13, color: { argb: 'FFFFFFFF' } };
-    ws.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
-    ws.getRow(1).height = 28;
-
-    ws.getCell('A2').value = isDiaria ? `Data: ${fmtBR(dia)}` : `Período: ${fmtBR(ini)} a ${fmtBR(fim)}`;
-    ws.getCell('A2').font = { bold: true };
-
-    const headerRow = ws.getRow(4);
-    headerRow.values = isDiaria
-      ? ['Médico(a)', 'Data', 'Tipo / Status', 'Atendimentos', '']
-      : ['Médico(a)', 'Dias Trabalhados', 'Total no Mês', 'Média Diária', ''];
-
-    headerRow.eachCell((c, colNum) => {
-      if (colNum <= 4) {
-        c.fill = azulEscuro;
-        c.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-        c.alignment = { horizontal: 'center' };
-        c.border = bordaFina;
-      }
-    });
-
-    const query = isDiaria
-      ? `SELECT COALESCE(mr.nome, a.medico_extra_nome) AS medico,
-                CASE WHEN a.medico_extra_nome IS NOT NULL THEN 'Extra/Substituto'
-                     WHEN a.medico_real_id <> a.medico_escalado_id THEN 'Troca de Plantão'
-                     ELSE 'Escala Normal' END AS status,
-                a.quantidade::INT AS total
-         FROM atendimentos a
-         LEFT JOIN medicos mr ON mr.id = a.medico_real_id
-         WHERE a.data = $1 ORDER BY total DESC`
-      : `SELECT COALESCE(mr.nome, a.medico_extra_nome) AS medico,
-                COUNT(DISTINCT a.data)::INT AS dias,
-                SUM(a.quantidade)::INT AS total
-         FROM atendimentos a
-         LEFT JOIN medicos mr ON mr.id = a.medico_real_id
-         WHERE a.data BETWEEN $1 AND $2 AND a.quantidade > 0
-         GROUP BY medico ORDER BY total DESC`;
-
-    const { rows } = await pool.query(query, isDiaria ? [dia] : [ini, fim]);
-    let rowIdx = 5;
-    rows.forEach((r) => {
-      const row = ws.getRow(rowIdx);
+      const lastR = Math.max(5, rowIdx - 1);
+      const rTot = ws.getRow(rowIdx);
+      const rMed = ws.getRow(rowIdx + 1);
       if (isDiaria) {
-        row.values = [r.medico, fmtBR(dia), r.status, r.total];
-        row.getCell(4).fill = amareloClaro;
-        row.getCell(4).font = { bold: true, color: { argb: 'FF0000FF' } };
+        rTot.values = ['TOTAL DO DIA', '', '', dados.linhas.length ? { formula: `SUM(D5:D${lastR})` } : 0];
+        rMed.values = ['MÉDIA POR MÉDICO', '', '', dados.linhas.length ? { formula: `AVERAGE(D5:D${lastR})` } : 0];
+        rMed.getCell(4).numFmt = '0.0';
       } else {
-        row.values = [r.medico, r.dias, r.total, { formula: `IF(B${rowIdx}=0,0,C${rowIdx}/B${rowIdx})` }];
-        row.getCell(3).fill = amareloClaro;
-        row.getCell(3).font = { bold: true, color: { argb: 'FF0000FF' } };
-        row.getCell(4).numFmt = '0.0';
+        rTot.values = ['TOTAL DO MÊS', dados.linhas.length ? { formula: `SUM(B5:B${lastR})` } : 0, dados.linhas.length ? { formula: `SUM(C5:C${lastR})` } : 0, ''];
+        rMed.values = ['MÉDIA POR MÉDICO', '', dados.linhas.length ? { formula: `AVERAGE(C5:C${lastR})` } : 0, ''];
+        rMed.getCell(3).numFmt = '0.0';
       }
-      for (let c = 1; c <= 4; c++) {
-        row.getCell(c).border = bordaFina;
-        if (c > 1) row.getCell(c).alignment = { horizontal: 'center' };
-      }
-      rowIdx++;
-    });
 
-    const lastR = Math.max(5, rowIdx - 1);
-    const rTot = ws.getRow(rowIdx);
-    const rMed = ws.getRow(rowIdx + 1);
-    if (isDiaria) {
-      rTot.values = ['TOTAL DO DIA', '', '', rows.length ? { formula: `SUM(D5:D${lastR})` } : 0];
-      rMed.values = ['MÉDIA POR MÉDICO', '', '', rows.length ? { formula: `AVERAGE(D5:D${lastR})` } : 0];
-      rMed.getCell(4).numFmt = '0.0';
-    } else {
-      rTot.values = ['TOTAL DO MÊS', rows.length ? { formula: `SUM(B5:B${lastR})` } : 0, rows.length ? { formula: `SUM(C5:C${lastR})` } : 0, ''];
-      rMed.values = ['MÉDIA POR MÉDICO', '', rows.length ? { formula: `AVERAGE(C5:C${lastR})` } : 0, ''];
-      rMed.getCell(3).numFmt = '0.0';
+      [rTot, rMed].forEach((r) => {
+        for (let c = 1; c <= 4; c++) {
+          const cell = r.getCell(c);
+          cell.font = { bold: true };
+          cell.fill = rodapeFundo;
+          cell.border = bordaFina;
+          if (c > 1) cell.alignment = { horizontal: 'center' };
+        }
+      });
+
+      ws.columns = [{ width: 32 }, { width: 20 }, { width: 20 }, { width: 18 }];
+      linhaGrafico = rowIdx + 3;
     }
-    [rTot, rMed].forEach((r) => {
-      for (let c = 1; c <= 4; c++) {
-        r.getCell(c).font = { bold: true };
-        r.getCell(c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8EEF5' } };
-        r.getCell(c).border = bordaFina;
-        if (c > 1) r.getCell(c).alignment = { horizontal: 'center' };
-      }
-    });
 
-    ws.columns = [{ width: 32 }, { width: 18 }, { width: 20 }, { width: 18 }, { width: 5 }];
-    linhaGrafico = rowIdx + 3;
+    if (chartBase64 && chartBase64.startsWith('data:image/png;base64,')) {
+      const imgId = wb.addImage({ base64: chartBase64, extension: 'png' });
+      ws.addImage(imgId, { tl: { col: 0, row: linhaGrafico }, ext: { width: 760, height: 360 } });
+    }
+
+    const buffer = await wb.xlsx.writeBuffer();
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=Atendimentos_UPA_${periodo}_${dataRef || 'atual'}.xlsx`);
+    res.send(Buffer.from(buffer));
+  } catch (err) {
+    console.error('Erro Excel:', err);
+    res.status(500).json({ erro: 'Falha ao gerar a planilha Excel.' });
   }
-
-  // Insere o gráfico na mesma aba do Excel
-  if (chartBase64 && chartBase64.startsWith('data:image/png;base64,')) {
-    const imgId = wb.addImage({ base64: chartBase64, extension: 'png' });
-    ws.addImage(imgId, {
-      tl: { col: 0, row: linhaGrafico },
-      ext: { width: 760, height: 360 }
-    });
-  }
-
-  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-  res.setHeader('Content-Disposition', `attachment; filename=Atendimentos_UPA_${periodo}_${dia}.xlsx`);
-  await wb.xlsx.write(res);
-  res.end();
 });
 
 const PORT = process.env.PORT || 3000;
