@@ -66,7 +66,13 @@ function calcularIntervalos(dataStr) {
   fimSemana.setDate(inicioSemana.getDate() + 6);
   const inicioMes = new Date(ref.getFullYear(), ref.getMonth(), 1);
   const fimMes = new Date(ref.getFullYear(), ref.getMonth() + 1, 0);
-  return { dia: fmt(ref), inicioSemana: fmt(inicioSemana), fimSemana: fmt(fimSemana), inicioMes: fmt(inicioMes), fimMes: fmt(fimMes) };
+  return {
+    dia: fmt(ref),
+    inicioSemana: fmt(inicioSemana),
+    fimSemana: fmt(fimSemana),
+    inicioMes: fmt(inicioMes),
+    fimMes: fmt(fimMes)
+  };
 }
 
 // ==================== AUTENTICAÇÃO ====================
@@ -78,8 +84,21 @@ app.post('/api/login', async (req, res) => {
     if (!user || !(await bcrypt.compare(senha, user.senha_hash))) {
       return res.status(401).json({ erro: 'E-mail ou senha inválidos.' });
     }
-    const token = jwt.sign({ id: user.id, nome: user.nome, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '12h' });
-    res.json({ token, usuario: { id: user.id, nome: user.nome, email: user.email, role: user.role, primeiro_acesso: user.primeiro_acesso } });
+    const token = jwt.sign(
+      { id: user.id, nome: user.nome, email: user.email, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '12h' }
+    );
+    res.json({
+      token,
+      usuario: {
+        id: user.id,
+        nome: user.nome,
+        email: user.email,
+        role: user.role,
+        primeiro_acesso: user.primeiro_acesso
+      }
+    });
   } catch {
     res.status(500).json({ erro: 'Erro interno no login.' });
   }
@@ -91,7 +110,10 @@ app.post('/api/alterar-senha', autenticar, async (req, res) => {
     return res.status(400).json({ erro: 'A nova senha deve ter no mínimo 6 caracteres e ser diferente da padrão.' });
   }
   const hash = await bcrypt.hash(novaSenha, 10);
-  await pool.query('UPDATE usuarios SET senha_hash = $1, primeiro_acesso = FALSE WHERE id = $2', [hash, req.user.id]);
+  await pool.query(
+    'UPDATE usuarios SET senha_hash = $1, primeiro_acesso = FALSE WHERE id = $2',
+    [hash, req.user.id]
+  );
   res.json({ mensagem: 'Senha atualizada com sucesso.' });
 });
 
@@ -107,7 +129,10 @@ app.post('/api/esqueci-senha', async (req, res) => {
     }
     const token = crypto.randomBytes(24).toString('hex');
     const expira = new Date(Date.now() + 60 * 60 * 1000);
-    await pool.query('UPDATE usuarios SET reset_token = $1, reset_expira = $2 WHERE id = $3', [token, expira, rows[0].id]);
+    await pool.query(
+      'UPDATE usuarios SET reset_token = $1, reset_expira = $2 WHERE id = $3',
+      [token, expira, rows[0].id]
+    );
 
     const link = `${process.env.APP_URL || 'https://upa-atendimentos.onrender.com'}/?resetToken=${token}`;
     const info = await transporter.sendMail({
@@ -118,7 +143,9 @@ app.post('/api/esqueci-senha', async (req, res) => {
     });
 
     console.log('E-mail enviado com sucesso:', info.messageId, 'para', rows[0].email);
-    res.json({ mensagem: `E-mail de confirmação enviado com sucesso para ${rows[0].email}! Verifique sua caixa de entrada e a pasta de Spam.` });
+    res.json({
+      mensagem: `E-mail de confirmação enviado com sucesso para ${rows[0].email}! Verifique sua caixa de entrada e a pasta de Spam.`
+    });
   } catch (err) {
     console.error('Erro SMTP:', err);
     res.status(500).json({ erro: `Falha ao enviar e-mail (${err.code || 'SMTP'}): ${err.message}` });
@@ -127,11 +154,18 @@ app.post('/api/esqueci-senha', async (req, res) => {
 
 app.post('/api/redefinir-senha', async (req, res) => {
   const { token, novaSenha } = req.body;
-  if (!novaSenha || novaSenha.length < 6) return res.status(400).json({ erro: 'A senha deve ter pelo menos 6 caracteres.' });
+  if (!novaSenha || novaSenha.length < 6) {
+    return res.status(400).json({ erro: 'A senha deve ter pelo menos 6 caracteres.' });
+  }
   const { rows } = await pool.query('SELECT id FROM usuarios WHERE reset_token = $1 AND reset_expira > NOW()', [token]);
-  if (rows.length === 0) return res.status(400).json({ erro: 'Token inválido ou expirado.' });
+  if (rows.length === 0) {
+    return res.status(400).json({ erro: 'Token inválido ou expirado.' });
+  }
   const hash = await bcrypt.hash(novaSenha, 10);
-  await pool.query('UPDATE usuarios SET senha_hash = $1, primeiro_acesso = FALSE, reset_token = NULL, reset_expira = NULL WHERE id = $2', [hash, rows[0].id]);
+  await pool.query(
+    'UPDATE usuarios SET senha_hash = $1, primeiro_acesso = FALSE, reset_token = NULL, reset_expira = NULL WHERE id = $2',
+    [hash, rows[0].id]
+  );
   res.json({ mensagem: 'Senha redefinida com sucesso. Faça login novamente.' });
 });
 
@@ -161,8 +195,10 @@ app.put('/api/usuarios/:id', autenticar, apenasAdmin, async (req, res) => {
   try {
     if (novaSenha) {
       const hash = await bcrypt.hash(novaSenha, 10);
-      await pool.query('UPDATE usuarios SET nome=$1, email=$2, role=$3, senha_hash=$4, primeiro_acesso=$5 WHERE id=$6',
-        [nome, email, role, hash, novaSenha === SENHA_PADRAO, req.params.id]);
+      await pool.query(
+        'UPDATE usuarios SET nome=$1, email=$2, role=$3, senha_hash=$4, primeiro_acesso=$5 WHERE id=$6',
+        [nome, email, role, hash, novaSenha === SENHA_PADRAO, req.params.id]
+      );
     } else {
       await pool.query('UPDATE usuarios SET nome=$1, email=$2, role=$3 WHERE id=$4', [nome, email, role, req.params.id]);
     }
@@ -173,7 +209,9 @@ app.put('/api/usuarios/:id', autenticar, apenasAdmin, async (req, res) => {
 });
 
 app.delete('/api/usuarios/:id', autenticar, apenasAdmin, async (req, res) => {
-  if (Number(req.params.id) === req.user.id) return res.status(400).json({ erro: 'Você não pode remover a si mesmo.' });
+  if (Number(req.params.id) === req.user.id) {
+    return res.status(400).json({ erro: 'Você não pode remover a si mesmo.' });
+  }
   await pool.query('DELETE FROM usuarios WHERE id = $1', [req.params.id]);
   res.json({ mensagem: 'Usuário removido.' });
 });
@@ -230,8 +268,10 @@ app.post('/api/escala', autenticar, async (req, res) => {
 app.delete('/api/escala/:id', autenticar, async (req, res) => {
   const { data_fim } = req.query;
   if (data_fim) {
-    // Encerra a vigência no dia anterior à data escolhida para não afetar o passado
-    await pool.query(`UPDATE escala_padrao SET data_fim = ($1::date - INTERVAL '1 day')::date WHERE id = $2`, [data_fim, req.params.id]);
+    await pool.query(
+      `UPDATE escala_padrao SET data_fim = ($1::date - INTERVAL '1 day')::date WHERE id = $2`,
+      [data_fim, req.params.id]
+    );
   } else {
     await pool.query('UPDATE escala_padrao SET ativo = FALSE WHERE id = $1', [req.params.id]);
   }
@@ -246,7 +286,15 @@ app.get('/api/resumo', autenticar, async (req, res) => {
     pool.query('SELECT COALESCE(SUM(quantidade), 0)::INT AS total FROM atendimentos WHERE data BETWEEN $1 AND $2', [inicioSemana, fimSemana]),
     pool.query('SELECT COALESCE(SUM(quantidade), 0)::INT AS total FROM atendimentos WHERE data BETWEEN $1 AND $2', [inicioMes, fimMes])
   ]);
-  res.json({ totalDia: rDia.rows[0].total, totalSemana: rSem.rows[0].total, totalMes: rMes.rows[0].total, inicioSemana, fimSemana, inicioMes, fimMes });
+  res.json({
+    totalDia: rDia.rows[0].total,
+    totalSemana: rSem.rows[0].total,
+    totalMes: rMes.rows[0].total,
+    inicioSemana,
+    fimSemana,
+    inicioMes,
+    fimMes
+  });
 });
 
 app.get('/api/atendimentos', autenticar, async (req, res) => {
@@ -288,10 +336,14 @@ app.post('/api/atendimentos', autenticar, async (req, res) => {
         `INSERT INTO atendimentos (data, escala_id, medico_escalado_id, medico_real_id, medico_extra_nome, turno, quantidade, registrado_por)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
         [
-          data, item.escala_id || null, item.medico_escalado_id || null,
+          data,
+          item.escala_id || null,
+          item.medico_escalado_id || null,
           item.medico_extra_nome ? null : (item.medico_real_id || item.medico_escalado_id),
-          item.medico_extra_nome?.trim() || null, item.turno || '24h',
-          Number(item.quantidade || 0), req.user.id
+          item.medico_extra_nome?.trim() || null,
+          item.turno || '24h',
+          Number(item.quantidade || 0),
+          req.user.id
         ]
       );
     }
@@ -328,31 +380,61 @@ async function montarDadosPlanilha(periodo, dataRef) {
     const datas = [];
     const base = new Date(`${inicioSemana}T12:00:00`);
     for (let i = 0; i < 7; i++) {
-      const d = new Date(base); d.setDate(base.getDate() + i);
+      const d = new Date(base);
+      d.setDate(base.getDate() + i);
       datas.push(d.toISOString().split('T')[0]);
     }
     const [medRes, escRes, atdRes] = await Promise.all([
       pool.query('SELECT id, nome FROM medicos WHERE ativo = TRUE ORDER BY nome'),
-      pool.query('SELECT dia_semana, medico_id FROM escala_padrao WHERE ativo = TRUE AND data_inicio <= $1::date AND (data_fim IS NULL OR data_fim >= $2::date)', [fimSemana, inicioSemana]),
-      pool.query(`SELECT TO_CHAR(a.data,'YYYY-MM-DD') AS dt, COALESCE(m.nome, a.medico_extra_nome) AS nome, SUM(a.quantidade)::INT AS qtd
-                  FROM atendimentos a LEFT JOIN medicos m ON m.id = a.medico_real_id
-                  WHERE a.data BETWEEN $1 AND $2 GROUP BY 1, 2`, [inicioSemana, fimSemana])
+      pool.query(
+        'SELECT dia_semana, medico_id FROM escala_padrao WHERE ativo = TRUE AND data_inicio <= $1::date AND (data_fim IS NULL OR data_fim >= $2::date)',
+        [fimSemana, inicioSemana]
+      ),
+      pool.query(
+        `SELECT TO_CHAR(a.data,'YYYY-MM-DD') AS dt, COALESCE(m.nome, a.medico_extra_nome) AS nome, SUM(a.quantidade)::INT AS qtd
+         FROM atendimentos a LEFT JOIN medicos m ON m.id = a.medico_real_id
+         WHERE a.data BETWEEN $1 AND $2 GROUP BY 1, 2`,
+        [inicioSemana, fimSemana]
+      )
     ]);
     const escMap = {};
-    escRes.rows.forEach((e) => { (escMap[e.medico_id] = escMap[e.medico_id] || new Set()).add(e.dia_semana); });
+    escRes.rows.forEach((e) => {
+      (escMap[e.medico_id] = escMap[e.medico_id] || new Set()).add(e.dia_semana);
+    });
     const atdMap = {};
     const extras = new Set();
     const cad = new Set(medRes.rows.map((m) => m.nome));
-    atdRes.rows.forEach((r) => { atdMap[`${r.nome}|${r.dt}`] = r.qtd; if (r.nome && !cad.has(r.nome)) extras.add(r.nome); });
+    atdRes.rows.forEach((r) => {
+      atdMap[`${r.nome}|${r.dt}`] = r.qtd;
+      if (r.nome && !cad.has(r.nome)) extras.add(r.nome);
+    });
 
-    const linhas = [...medRes.rows.map((m) => ({ nome: m.nome, diasEsc: escMap[m.id] || new Set() })), ...Array.from(extras).map((n) => ({ nome: n, diasEsc: new Set() }))]
-      .map((m) => {
-        const vals = datas.map((dt) => atdMap[`${m.nome}|${dt}`] ?? null);
-        const total = vals.reduce((a, b) => a + (b || 0), 0);
-        const trab = vals.filter((v) => v !== null && v > 0).length;
-        return { nome: m.nome, vals, total, media: trab ? +(total / trab).toFixed(1) : 0, diasEscala: m.diasEsc.size, diasSet: Array.from(m.diasEsc) };
-      });
-    return { titulo: `CONTROLE SEMANAL (${fmtBR(inicioSemana)} a ${fmtBR(fimSemana)}) – UPA PARQUE DOS FERREIRA`, periodo, inicio: inicioSemana, fim: fimSemana, diasNome, datas, linhas };
+    const linhas = [
+      ...medRes.rows.map((m) => ({ nome: m.nome, diasEsc: escMap[m.id] || new Set() })),
+      ...Array.from(extras).map((n) => ({ nome: n, diasEsc: new Set() }))
+    ].map((m) => {
+      const vals = datas.map((dt) => atdMap[`${m.nome}|${dt}`] ?? null);
+      const total = vals.reduce((a, b) => a + (b || 0), 0);
+      const trab = vals.filter((v) => v !== null && v > 0).length;
+      return {
+        nome: m.nome,
+        vals,
+        total,
+        media: trab ? +(total / trab).toFixed(1) : 0,
+        diasEscala: m.diasEsc.size,
+        diasSet: Array.from(m.diasEsc)
+      };
+    });
+
+    return {
+      titulo: `CONTROLE SEMANAL (${fmtBR(inicioSemana)} a ${fmtBR(fimSemana)}) – UPA PARQUE DOS FERREIRA`,
+      periodo,
+      inicio: inicioSemana,
+      fim: fimSemana,
+      diasNome,
+      datas,
+      linhas
+    };
   }
 
   const isDiaria = periodo === 'diaria';
@@ -370,7 +452,10 @@ async function montarDadosPlanilha(periodo, dataRef) {
   const { rows } = await pool.query(q, isDiaria ? [dia] : [ini, fim]);
   return {
     titulo: `CONTROLE ${isDiaria ? 'DIÁRIO' : 'MENSAL'} (${isDiaria ? fmtBR(dia) : `${fmtBR(ini)} a ${fmtBR(fim)}`}) – UPA PARQUE DOS FERREIRA`,
-    periodo, inicio: ini, fim, linhas: rows
+    periodo,
+    inicio: ini,
+    fim,
+    linhas: rows
   };
 }
 
@@ -378,7 +463,7 @@ app.get('/api/preview', autenticar, async (req, res) => {
   try {
     const dados = await montarDadosPlanilha(req.query.periodo || 'diaria', req.query.dataRef);
     res.json(dados);
-  } catch (err) {
+  } catch {
     res.status(500).json({ erro: 'Erro ao gerar prévia.' });
   }
 });
@@ -392,7 +477,12 @@ app.post('/api/exportar', autenticar, async (req, res) => {
     const azul = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F4E78' } };
     const amarelo = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF2CC' } };
     const cinza = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F4F7' } };
-    const borda = { top: { style: 'thin', color: { argb: 'FFD0D7DE' } }, left: { style: 'thin', color: { argb: 'FFD0D7DE' } }, bottom: { style: 'thin', color: { argb: 'FFD0D7DE' } }, right: { style: 'thin', color: { argb: 'FFD0D7DE' } } };
+    const borda = {
+      top: { style: 'thin', color: { argb: 'FFD0D7DE' } },
+      left: { style: 'thin', color: { argb: 'FFD0D7DE' } },
+      bottom: { style: 'thin', color: { argb: 'FFD0D7DE' } },
+      right: { style: 'thin', color: { argb: 'FFD0D7DE' } }
+    };
 
     const ws = wb.addWorksheet(periodo === 'semanal' ? 'Semanal' : periodo === 'diaria' ? 'Diaria' : 'Mensal');
     let linhaGrafico = 15;
@@ -400,49 +490,98 @@ app.post('/api/exportar', autenticar, async (req, res) => {
     if (periodo === 'semanal') {
       ws.mergeCells('A1:K1');
       ws.getCell('A1').value = dados.titulo;
-      ws.getCell('A1').fill = azul; ws.getCell('A1').font = { bold: true, size: 12, color: { argb: 'FFFFFFFF' } };
-      ws.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' }; ws.getRow(1).height = 26;
+      ws.getCell('A1').fill = azul;
+      ws.getCell('A1').font = { bold: true, size: 12, color: { argb: 'FFFFFFFF' } };
+      ws.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
+      ws.getRow(1).height = 26;
 
-      const r3 = ws.getRow(3); r3.values = ['Médico(a)', ...dados.diasNome, 'Total', 'Média', 'Escala'];
-      const r4 = ws.getRow(4); r4.values = ['Data', ...dados.datas.map(fmtBR), '', '', ''];
-      [r3, r4].forEach((r) => { for (let c = 1; c <= 11; c++) { const cell = r.getCell(c); cell.fill = azul; cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }; cell.alignment = { horizontal: 'center' }; cell.border = borda; } });
+      const r3 = ws.getRow(3);
+      r3.values = ['Médico(a)', ...dados.diasNome, 'Total', 'Média', 'Escala'];
+      const r4 = ws.getRow(4);
+      r4.values = ['Data', ...dados.datas.map(fmtBR), '', '', ''];
+      [r3, r4].forEach((r) => {
+        for (let c = 1; c <= 11; c++) {
+          const cell = r.getCell(c);
+          cell.fill = azul;
+          cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+          cell.alignment = { horizontal: 'center' };
+          cell.border = borda;
+        }
+      });
 
       let ri = 5;
       dados.linhas.forEach((m) => {
         const row = ws.getRow(ri);
-        row.getCell(1).value = m.nome; row.getCell(1).font = { bold: true }; row.getCell(1).border = borda;
+        row.getCell(1).value = m.nome;
+        row.getCell(1).font = { bold: true };
+        row.getCell(1).border = borda;
         m.vals.forEach((v, idx) => {
           const cell = row.getCell(idx + 2);
-          if (v !== null) { cell.value = v; cell.fill = amarelo; cell.font = { bold: true, color: { argb: 'FF0000FF' } }; }
-          else if (m.diasSet.includes(idx)) { cell.fill = amarelo; }
-          else { cell.value = '-'; cell.fill = cinza; cell.font = { color: { argb: 'FF999999' } }; }
-          cell.alignment = { horizontal: 'center' }; cell.border = borda;
+          if (v !== null) {
+            cell.value = v;
+            cell.fill = amarelo;
+            cell.font = { bold: true, color: { argb: 'FF0000FF' } };
+          } else if (m.diasSet.includes(idx)) {
+            cell.fill = amarelo;
+          } else {
+            cell.value = '-';
+            cell.fill = cinza;
+            cell.font = { color: { argb: 'FF999999' } };
+          }
+          cell.alignment = { horizontal: 'center' };
+          cell.border = borda;
         });
         row.getCell(9).value = { formula: `SUM(B${ri}:H${ri})` };
         row.getCell(10).value = { formula: `IF(COUNT(B${ri}:H${ri})=0,0,AVERAGE(B${ri}:H${ri}))` };
         row.getCell(10).numFmt = '0.0';
         row.getCell(11).value = m.diasEscala;
-        [9, 10, 11].forEach((c) => { row.getCell(c).alignment = { horizontal: 'center' }; row.getCell(c).border = borda; });
+        [9, 10, 11].forEach((c) => {
+          row.getCell(c).alignment = { horizontal: 'center' };
+          row.getCell(c).border = borda;
+        });
         ri++;
       });
 
       const lastR = Math.max(5, ri - 1);
-      const rTot = ws.getRow(ri); rTot.getCell(1).value = 'TOTAL DO DIA';
-      ['B', 'C', 'D', 'E', 'F', 'G', 'H'].forEach((col, i) => { rTot.getCell(i + 2).value = { formula: `SUM(${col}5:${col}${lastR})` }; });
+      const rTot = ws.getRow(ri);
+      rTot.getCell(1).value = 'TOTAL DO DIA';
+      ['B', 'C', 'D', 'E', 'F', 'G', 'H'].forEach((col, i) => {
+        rTot.getCell(i + 2).value = { formula: `SUM(${col}5:${col}${lastR})` };
+      });
       rTot.getCell(9).value = { formula: `SUM(B${ri}:H${ri})` };
-      for (let c = 1; c <= 11; c++) { const cell = rTot.getCell(c); cell.font = { bold: true }; cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8EEF5' } }; cell.border = borda; if (c > 1) cell.alignment = { horizontal: 'center' }; }
-      ws.columns = [{ width: 26 }, { width: 12 }, { width: 12 }, { width: 12 }, { width: 12 }, { width: 12 }, { width: 12 }, { width: 12 }, { width: 12 }, { width: 11 }, { width: 11 }];
+      for (let c = 1; c <= 11; c++) {
+        const cell = rTot.getCell(c);
+        cell.font = { bold: true };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8EEF5' } };
+        cell.border = borda;
+        if (c > 1) cell.alignment = { horizontal: 'center' };
+      }
+      ws.columns = [
+        { width: 26 }, { width: 12 }, { width: 12 }, { width: 12 },
+        { width: 12 }, { width: 12 }, { width: 12 }, { width: 12 },
+        { width: 12 }, { width: 11 }, { width: 11 }
+      ];
       linhaGrafico = ri + 2;
     } else {
       const isDiaria = periodo === 'diaria';
-      ws.mergeCells('A1:D1'); // Título termina exatamente na coluna D
+      ws.mergeCells('A1:D1');
       ws.getCell('A1').value = dados.titulo;
-      ws.getCell('A1').fill = azul; ws.getCell('A1').font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
-      ws.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' }; ws.getRow(1).height = 26;
+      ws.getCell('A1').fill = azul;
+      ws.getCell('A1').font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
+      ws.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
+      ws.getRow(1).height = 26;
 
       const r3 = ws.getRow(3);
-      r3.values = isDiaria ? ['Médico(a)', 'Turno', 'Status', 'Atendimentos'] : ['Médico(a)', 'Dias Trabalhados', 'Total no Mês', 'Média Diária'];
-      for (let c = 1; c <= 4; c++) { const cell = r3.getCell(c); cell.fill = azul; cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }; cell.alignment = { horizontal: 'center' }; cell.border = borda; }
+      r3.values = isDiaria
+        ? ['Médico(a)', 'Turno', 'Status', 'Atendimentos']
+        : ['Médico(a)', 'Dias Trabalhados', 'Total no Mês', 'Média Diária'];
+      for (let c = 1; c <= 4; c++) {
+        const cell = r3.getCell(c);
+        cell.fill = azul;
+        cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        cell.alignment = { horizontal: 'center' };
+        cell.border = borda;
+      }
 
       let ri = 4;
       dados.linhas.forEach((r) => {
@@ -452,8 +591,12 @@ app.post('/api/exportar', autenticar, async (req, res) => {
           : [r.medico, r.col2, r.total, { formula: `IF(B${ri}=0,0,C${ri}/B${ri})` }];
         if (!isDiaria) row.getCell(4).numFmt = '0.0';
         const colDest = isDiaria ? 4 : 3;
-        row.getCell(colDest).fill = amarelo; row.getCell(colDest).font = { bold: true, color: { argb: 'FF0000FF' } };
-        for (let c = 1; c <= 4; c++) { row.getCell(c).border = borda; if (c > 1) row.getCell(c).alignment = { horizontal: 'center' }; }
+        row.getCell(colDest).fill = amarelo;
+        row.getCell(colDest).font = { bold: true, color: { argb: 'FF0000FF' } };
+        for (let c = 1; c <= 4; c++) {
+          row.getCell(c).border = borda;
+          if (c > 1) row.getCell(c).alignment = { horizontal: 'center' };
+        }
         ri++;
       });
 
@@ -462,7 +605,13 @@ app.post('/api/exportar', autenticar, async (req, res) => {
       rTot.values = isDiaria
         ? ['TOTAL DO DIA', '', '', dados.linhas.length ? { formula: `SUM(D4:D${lastR})` } : 0]
         : ['TOTAL DO MÊS', dados.linhas.length ? { formula: `SUM(B4:B${lastR})` } : 0, dados.linhas.length ? { formula: `SUM(C4:C${lastR})` } : 0, ''];
-      for (let c = 1; c <= 4; c++) { const cell = rTot.getCell(c); cell.font = { bold: true }; cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8EEF5' } }; cell.border = borda; if (c > 1) cell.alignment = { horizontal: 'center' }; }
+      for (let c = 1; c <= 4; c++) {
+        const cell = rTot.getCell(c);
+        cell.font = { bold: true };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8EEF5' } };
+        cell.border = borda;
+        if (c > 1) cell.alignment = { horizontal: 'center' };
+      }
       ws.columns = [{ width: 30 }, { width: 20 }, { width: 16 }, { width: 16 }];
       linhaGrafico = ri + 2;
     }
