@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - UPA Parque dos Ferreira</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="login-body">
+  <div class="login-card">
+    <img src="img/brasao_prefeitura.png" alt="Brasão da Prefeitura" class="login-brasao">
+    <h2>UPA Parque dos Ferreira</h2>
+    <p class="subtitle">Controle Diário de Atendimentos Médicos</p>
+
+    <form id="formLogin">
+      <input type="email" id="email" placeholder="E-mail institucional" required>
+      <input type="password" id="senha" placeholder="Sua senha" required>
+      <button type="submit" class="btn-primary full-width">Entrar no Sistema</button>
+    </form>
+
+    <button id="btnEsqueci" class="btn-link">Esqueci minha senha</button>
+    <p id="msgLogin" class="msg"></p>
+  </div>
+
+  <div id="modalPrimeiroAcesso" class="modal hidden">
+    <div class="modal-content">
+      <h3>Primeiro Acesso</h3>
+      <p>Cadastre uma nova senha pessoal (mínimo 6 caracteres) para liberar o sistema.</p>
+      <input type="password" id="novaSenhaPrimeiro" placeholder="Nova senha pessoal">
+      <button id="btnSalvarPrimeiroAcesso" class="btn-primary full-width">Salvar e Entrar</button>
+    </div>
+  </div>
+
+  <div id="modalReset" class="modal hidden">
+    <div class="modal-content">
+      <h3>Redefinir Senha</h3>
+      <input type="password" id="novaSenhaReset" placeholder="Digite sua nova senha">
+      <button id="btnConfirmarReset" class="btn-primary full-width">Confirmar Nova Senha</button>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
