@@ -25,7 +25,7 @@ const SENHA_PADRAO = 'upa123';
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || 'smtp.gmail.com',
   port: Number(process.env.SMTP_PORT || 587),
-  secure: false,
+  secure: Number(process.env.SMTP_PORT) === 465,
   auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
 });
 
@@ -95,27 +95,57 @@ app.post('/api/alterar-senha', autenticar, async (req, res) => {
   res.json({ mensagem: 'Senha atualizada com sucesso.' });
 });
 
-app.post('/api/esqueci-senha', async (req, res) => {
-  const { email } = req.body;
-  try {
-    const { rows } = await pool.query('SELECT id, nome, email FROM usuarios WHERE LOWER(email) = LOWER($1)', [email]);
-    if (rows.length === 0) return res.json({ mensagem: 'Se o e-mail estiver cadastrado, você receberá um link de redefinição.' });
-    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-      return res.status(400).json({ erro: 'Envio de e-mail ainda não configurado no Render (SMTP_USER / SMTP_PASS). Peça ao Administrador para redefinir sua senha.' });
+app.post('/api/esqueci-senha', async
+ (req, res) => {
+  const
+ { email } = req.body;
+  try
+ {
+    const { rows } = await pool.query('SELECT id, nome, email FROM usuarios WHERE LOWER(email) = LOWER($1)'
+, [email]);
+    if (rows.length === 0
+) {
+      return res.json({ mensagem: 'Se o e-mail estiver cadastrado, você receberá um link de redefinição.'
+ });
     }
-    const token = crypto.randomBytes(24).toString('hex');
-    const expira = new Date(Date.now() + 60 * 60 * 1000);
-    await pool.query('UPDATE usuarios SET reset_token = $1, reset_expira = $2 WHERE id = $3', [token, expira, rows[0].id]);
-    const link = `${process.env.APP_URL || 'https://upa-atendimentos.onrender.com'}/?resetToken=${token}`;
-    await transporter.sendMail({
-      from: `"UPA Parque dos Ferreira" <${process.env.SMTP_USER}>`,
-      to: rows[0].email,
-      subject: 'Redefinição de Senha - UPA Parque dos Ferreira',
+    if
+ (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+      return res.status(400).json({ erro: 'Envio de e-mail ainda não configurado no Render (SMTP_USER / SMTP_PASS).'
+ });
+    }
+    const token = crypto.randomBytes(24).toString('hex'
+);
+    const expira = new Date(Date.now() + 60 * 60 * 1000
+);
+    await pool.query('UPDATE usuarios SET reset_token = $1, reset_expira = $2 WHERE id = $3', [token, expira, rows[0
+].id]);
+
+    const link = `${process.env.APP_URL || 'https://upa-atendimentos.onrender.com'}/?resetToken=${token}`
+;
+    const info = await
+ transporter.sendMail({
+      from: `"UPA Parque dos Ferreira" <${process.env.SMTP_USER}>`
+,
+      to: rows[0
+].email,
+      subject: 'Redefinição de Senha - UPA Parque dos Ferreira'
+,
       html: `<p>Olá, ${rows[0].nome}.</p><p>Clique no link para redefinir sua senha (válido por 1 hora):</p><p><a href="${link}">${link}</a></p>`
     });
-    res.json({ mensagem: 'Link de redefinição enviado para o seu e-mail! Verifique também a caixa de Spam.' });
-  } catch (err) {
-    res.status(500).json({ erro: 'Falha ao enviar e-mail. Verifique as credenciais SMTP no Render.' });
+
+    console.log('E-mail enviado com sucesso:', info.messageId, 'para', rows[0
+].email);
+    res.json({ 
+mensagem: `E-mail de confirmação enviado com sucesso para ${rows[0].email}! Verifique sua caixa de entrada e a pasta de Spam.`
+ });
+  } 
+catch
+ (err) {
+    console.error('Erro SMTP:'
+, err);
+    res.status(
+500).json({ erro: `Falha ao enviar e-mail (${err.code || 'SMTP'}): ${err.message}`
+ });
   }
 });
 
