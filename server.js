@@ -330,7 +330,7 @@ async function montarDadosPlanilha(periodo, dataRef) {
       pool.query('SELECT dia_semana, medico_id FROM escala_padrao WHERE ativo = TRUE AND data_inicio <= $1::date AND (data_fim IS NULL OR data_fim >= $2::date)', [fimSemana, inicioSemana]),
       pool.query(`SELECT TO_CHAR(a.data,'YYYY-MM-DD') AS dt, COALESCE(m.nome, a.medico_extra_nome) AS nome, SUM(a.quantidade)::INT AS qtd
                   FROM atendimentos a LEFT JOIN medicos m ON m.id = a.medico_real_id
-                  WHERE a.data BETWEEN $1 AND $2 GROUP BY dt, nome`, [inicioSemana, fimSemana])
+                  WHERE a.data BETWEEN $1 AND $2 GROUP BY 1, 2`, [inicioSemana, fimSemana])
     ]);
     const escMap = {};
     escRes.rows.forEach((e) => { (escMap[e.medico_id] = escMap[e.medico_id] || new Set()).add(e.dia_semana); });
